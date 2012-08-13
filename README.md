@@ -22,7 +22,7 @@ Simple Datalogger API
 > cd server/
 > python manage runserver
 
-Visit [devserver(http://127.0.0.1:8000)
+Visit [devserver](http://127.0.0.1:8000)
 
 ### Usage on dotcloud
 dotcloud push APPNAME server/
