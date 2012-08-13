@@ -4,8 +4,7 @@ lightuino
 Lightuino - Light sensor datalogger
 
 [Demo](http://lightuino-s5zrh4wu.dotcloud.com/)
-![Screenshot from demo](screenshot-lightuino-datalogger.png "Screenshot from demo")
-
+[Screenshot from demo](screenshot-lightuino-datalogger.png "Screenshot from demo")
 
 
 Server
