@@ -27,4 +27,8 @@ pip-log.txt
 .mr.developer.cfg
 
 #server
-server/local_settings.py
+server/server/local_settings.py
+
+# pycharm
+server/.idea
+.idea
