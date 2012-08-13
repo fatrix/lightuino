@@ -1,0 +1,2 @@
+python /home/dotcloud/code/manage.py collectstatic --noinput
+python /home/dotcloud/code/manage.py syncdb --noinput
