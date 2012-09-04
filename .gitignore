@@ -32,3 +32,5 @@ server/server/local_settings.py
 # pycharm
 server/.idea
 .idea
+
+.DS_Store
