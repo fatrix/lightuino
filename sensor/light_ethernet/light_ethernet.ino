@@ -5,16 +5,21 @@
  
  http://arduino.cc/en/Tutorial/WebClientRepeating
  
+ NTP from:
+ http://arduino.cc/en/Tutorial/UdpNtpClient
+ 
  */
 
 #include <SPI.h>
 #include <Ethernet.h>
+#include <SD.h>
 
 // light sensor
 int photocellPin = 0;
 int photocellReading;
 
-byte mac[] = {  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+byte mac[] = {  
+  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 IPAddress server(192,168,3,95);
 char serverName[] = "lightuino-s5zrh4wu.dotcloud.com";
 IPAddress ip(192,168,3,199);
@@ -31,6 +36,10 @@ unsigned long lastConnectionTime = 0;
 boolean lastConnected = false;
 const unsigned long interval = 60L*1000L;
 
+// SD
+const int chipSelect = 4;
+
+
 void setup() {
   // start serial port:
   Serial.begin(9600);
@@ -42,11 +51,25 @@ void setup() {
   Serial.print("My IP address: ");
   Serial.println(Ethernet.localIP());
 
+  // Setup sd card -----------------------
+  Serial.print("Initializing SD card...");
+  pinMode(4, OUTPUT);
+
+  // see if the card is present and can be initialized:
+  if (!SD.begin(chipSelect)) {
+    Serial.println("Card failed, or not present");
+    // don't do anything more:
+    return;
+  }
+  Serial.println("card initialized.");
+  // # -----------------------------------
+
 }
 
 void loop() {
   //Serial.println("loop"); 
-  
+
+
   // Read incoming data if any available
   if (client.available()) {
     char c = client.read();
@@ -64,7 +87,7 @@ void loop() {
   if(!client.connected() && (millis() - lastConnectionTime > interval)) {
     httpRequest();
   } 
-  
+
   // Store the state for the next run threw the loop
   lastConnected = client.connected();
 }
@@ -74,11 +97,12 @@ void httpRequest() {
   // if there's a successful connection:
   Serial.println("connecting...");
   if (client.connect(serverName, 80)) {
-    
+
     int light = readLight();
-    
+    log(light);
+
     url = "GET /api/?" + String("light=") + light + String(" HTTP/1.1");
-    
+
     client.println(url);
     client.println(String("Host: ")+serverName);
     client.println("User-Agent: arduino-ethernet");
@@ -97,13 +121,30 @@ void httpRequest() {
 }
 
 int readLight() {
-    // read light sensor
-    photocellReading = analogRead(photocellPin);
-    
-    Serial.print("analog reading = ");
-    Serial.println(photocellReading); 
-    return photocellReading;
+  // read light sensor
+  photocellReading = analogRead(photocellPin);
+
+  Serial.print("analog reading = ");
+  Serial.println(photocellReading); 
+  return photocellReading;
 }
+
+boolean log(int dataString) {
+  File dataFile = SD.open("DATALOG.TXT", FILE_WRITE);
+
+  // if the file is available, write to it:
+  if (dataFile) {
+    dataFile.println(dataString);
+    dataFile.close();
+    // print to the serial port too:
+    Serial.println("Written to log: "+dataString);
+  }  
+  // if the file isn't open, pop up an error:
+  else {
+    Serial.println("error opening datalog.txt");
+  } 
+}
+
 
 
 
