@@ -19,6 +19,11 @@
 int photocellPin = 0;
 int photocellReading;
 
+typedef enum {
+  READ,
+  NOTREAD
+} 
+STATE;
 byte mac[] = {  
   0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 IPAddress server(192,168,3,95);
@@ -86,13 +91,26 @@ void setup() {
 
 void loop() {
 
+  byte state = NOTREAD;
+  byte c;
+  int content_bytes_received = 0;
+  char line_buff[100];
+  int line_cursor = 0;
   // ---- handle ethernet stuff
-  char resp[50];
+
   // Read incoming data if any available
   while (client.available()) {
     char c = client.read();
-    strcat(resp, c)
-    }
+    //Serial.print(c);
+    content_bytes_received++;
+    line_buff[line_cursor++] = c;
+    state=READ;
+  }
+  if (state==READ) {
+    Serial.println(line_buff);
+    Serial.flush();
+    SD.remove(FILENAME);
+  }
 
     // If not connected but there was one in the last loop, disconnect
     if (!client.connected() && lastConnected) {

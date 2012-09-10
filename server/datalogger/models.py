@@ -10,3 +10,12 @@ class Data(models.Model):
         epoch = int(time.mktime(self.date.timetuple())*1000)
         return epoch
 
+class TimedData(models.Model):
+    value = models.IntegerField()
+    date = models.DateTimeField()
+
+    @property
+    def ms(self):
+        epoch = int(time.mktime(self.date.timetuple())*1000)
+        return epoch
+
