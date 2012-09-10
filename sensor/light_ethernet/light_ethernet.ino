@@ -12,6 +12,7 @@
 
 #include <SPI.h>
 #include <Ethernet.h>
+#include <EthernetUdp.h>
 #include <SD.h>
 
 // light sensor
@@ -21,10 +22,11 @@ int photocellReading;
 byte mac[] = {  
   0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 IPAddress server(192,168,3,95);
-char serverName[] = "lightuino-s5zrh4wu.dotcloud.com";
-IPAddress ip(192,168,3,199);
-IPAddress myDns(8,8,8,8);
-IPAddress gw(192,168,3,1);
+//char serverName[] = "lightuino-s5zrh4wu.dotcloud.com";
+char serverName[] = "192.168.3.95";
+//IPAddress ip(192,168,3,199);
+//IPAddress myDns(8,8,8,8);
+//IPAddress gw(192,168,3,1);
 
 // Client
 EthernetClient client;
@@ -34,11 +36,24 @@ String url;
 
 unsigned long lastConnectionTime = 0;
 boolean lastConnected = false;
-const unsigned long interval = 60L*1000L;
+boolean lastLight = false;
+boolean firstRun = true;
+const unsigned long log_interval = 60L*100L;
+const unsigned long sync_interval = 60L*500L;
 
 // SD
 const int chipSelect = 4;
+char* FILENAME = "DATALOG.TXT";
 
+
+// NTP
+unsigned int localPort = 8888;      // local port to listen for UDP packets
+IPAddress timeServer(192,43,244,18); // time.nist.gov NTP server
+const int NTP_PACKET_SIZE= 48; // NTP time stamp is in the first 48 bytes of the message
+byte packetBuffer[ NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets 
+// A UDP instance to let us send and receive packets over UDP
+EthernetUDP Udp;
+boolean hasTime = false;
 
 void setup() {
   // start serial port:
@@ -46,13 +61,14 @@ void setup() {
   // give the ethernet module time to boot up:
   delay(1000);
   // start the Ethernet connection using a fixed IP address and DNS server:
-  Ethernet.begin(mac, ip, myDns, gw);
+  Ethernet.begin(mac);
   // print the Ethernet board/shield's IP address:
-  Serial.print("My IP address: ");
+  //Serial.print("My IP address: ");
   Serial.println(Ethernet.localIP());
+  //digitalWrite(10,HIGH);
 
   // Setup sd card -----------------------
-  Serial.print("Initializing SD card...");
+  //Serial.print("Initializing SD card...");
   pinMode(4, OUTPUT);
 
   // see if the card is present and can be initialized:
@@ -61,61 +77,104 @@ void setup() {
     // don't do anything more:
     return;
   }
-  Serial.println("card initialized.");
+  //Serial.println("card initialized.");
   // # -----------------------------------
+
+  Udp.begin(localPort);
 
 }
 
 void loop() {
-  //Serial.println("loop"); 
 
-
+  // ---- handle ethernet stuff
+  char resp[50];
   // Read incoming data if any available
-  if (client.available()) {
+  while (client.available()) {
     char c = client.read();
-    Serial.print(c);
-  }
+    strcat(resp, c)
+    }
 
-  // If not connected but there was one in the last loop, disconnect
-  if (!client.connected() && lastConnected) {
-    Serial.println();
-    Serial.println("disconnecting.");
-    client.stop();
-  }
+    // If not connected but there was one in the last loop, disconnect
+    if (!client.connected() && lastConnected) {
+      //Serial.println();
+      //Serial.println("disconnecting.");
+      client.stop();
+    }
 
   // If not connected and it is time to connect, do the work
-  if(!client.connected() && (millis() - lastConnectionTime > interval)) {
+  if(!client.connected() && (millis() - lastConnectionTime > sync_interval)) {
     httpRequest();
   } 
 
+  // do work in following conditions
+  // - firstRun (on startup)
+  // - when it is time
+  // - but there is no http traffic 
+  else if (firstRun || (millis() - lastLight > log_interval) && !lastConnected) {
+    // log light
+    char buf[50];
+    int light = readLight();
+    unsigned long time = gettime();
+
+    sprintf(buf, "%d;%lu|", light, time);
+    log(buf);
+    lastLight = millis();
+
+    firstRun = false;
+
+    delay(10000);
+  }
+
+
   // Store the state for the next run threw the loop
   lastConnected = client.connected();
+  // ----- end handle ethernet sftufflo
+
+
+
 }
 
 // Open TCP-Connection and send a HTTP Request
 void httpRequest() {
   // if there's a successful connection:
-  Serial.println("connecting...");
-  if (client.connect(serverName, 80)) {
+  //Serial.println("connecting...");
+  if (client.connect(serverName, 8000)) {
 
-    int light = readLight();
-    log(light);
+    url = "POST /api/batch/" + String(" HTTP/1.1");
+    File myFile = SD.open(FILENAME);
+    if (myFile) {
+      client.print(url+"\n");
+      client.print(String("Host: ")+serverName+"\n");
+      client.print("User-Agent: arduino-ethernet\n");
+      client.print("Content-Length: ");
+      client.println(myFile.size());
+      client.println("Connection: close");
+      client.println();
 
-    url = "GET /api/?" + String("light=") + light + String(" HTTP/1.1");
+      // read from the file until there's nothing else in it:
+      while (myFile.available()) {
+        int c = myFile.read();
+        client.write(c);
+      }
+      // close the file:
+      myFile.close();
+      client.println();
 
-    client.println(url);
-    client.println(String("Host: ")+serverName);
-    client.println("User-Agent: arduino-ethernet");
-    client.println("Connection: close");
-    client.println();
+      SD.remove(FILENAME);
+
+    } 
+    else {
+      // if the file didn't open, print an error:
+      Serial.println("error opening file");
+    }
 
     // Save the time
     lastConnectionTime = millis();
   } 
   else {
     // if you couldn't make a connection:
-    Serial.println("connection failed");
-    Serial.println("disconnecting.");
+    //Serial.println("connection failed");
+    //Serial.println("disconnecting.");
     client.stop();
   }
 }
@@ -123,27 +182,62 @@ void httpRequest() {
 int readLight() {
   // read light sensor
   photocellReading = analogRead(photocellPin);
-
-  Serial.print("analog reading = ");
-  Serial.println(photocellReading); 
   return photocellReading;
 }
 
-boolean log(int dataString) {
-  File dataFile = SD.open("DATALOG.TXT", FILE_WRITE);
+boolean log(String dataString) {
+  File dataFile = SD.open(FILENAME, FILE_WRITE);
 
   // if the file is available, write to it:
   if (dataFile) {
-    dataFile.println(dataString);
+    dataFile.print(dataString);
     dataFile.close();
     // print to the serial port too:
     Serial.println("Written to log: "+dataString);
   }  
   // if the file isn't open, pop up an error:
   else {
-    Serial.println("error opening datalog.txt");
+    Serial.println("error opening file");
   } 
 }
+
+long gettime() {
+  //Serial.println("Get time from timeserver");
+  sendNTPpacket(timeServer); 
+  delay(1000);  
+  if ( Udp.parsePacket() ) {  
+    Udp.read(packetBuffer,NTP_PACKET_SIZE);  // read the packet into the buffer
+    unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
+    unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);  
+    unsigned long secsSince1900 = highWord << 16 | lowWord;                
+    const unsigned long seventyYears = 2208988800UL;     
+    unsigned long epoch = secsSince1900 - seventyYears;  
+    hasTime = true;
+    return epoch;
+
+  }
+}
+
+// send an NTP request to the time server at the given address 
+unsigned long sendNTPpacket(IPAddress& address)
+{
+  memset(packetBuffer, 0, NTP_PACKET_SIZE); 
+  packetBuffer[0] = 0b11100011;   // LI, Version, Mode
+  packetBuffer[1] = 0;     // Stratum, or type of clock
+  packetBuffer[2] = 6;     // Polling Interval
+  packetBuffer[3] = 0xEC;  // Peer Clock Precision
+  // 8 bytes of zero for Root Delay & Root Dispersion
+  packetBuffer[12]  = 49; 
+  packetBuffer[13]  = 0x4E;
+  packetBuffer[14]  = 49;
+  packetBuffer[15]  = 52;
+  Udp.beginPacket(address, 123); //NTP requests are to port 123
+  Udp.write(packetBuffer,NTP_PACKET_SIZE);
+  Udp.endPacket(); 
+}
+
+
+
 
 
 
