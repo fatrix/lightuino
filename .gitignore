@@ -36,3 +36,5 @@ server/.idea
 .DS_Store
 
 sensor/.DS_Store
+
+*.swp

@@ -10,7 +10,8 @@ import datetime
 import pytz
 
 def index(request):
-    data=Data.objects.raw('SELECT id, date, value, ROUND(UNIX_TIMESTAMP(date)/(15*60)) AS timekey FROM datalogger_data GROUP BY timekey')
+    #data=Data.objects.raw('SELECT id, date, value, ROUND(UNIX_TIMESTAMP(date)/(15*60)) AS timekey FROM datalogger_data GROUP BY timekey')
+    data=Data.objects.raw('SELECT id, date, value, ROUND(UNIX_TIMESTAMP(date)/(15*60)) AS timekey FROM datalogger_timeddata GROUP BY timekey')
     return render_to_response('index.html', {'data': data}, context_instance=RequestContext(request))
 
 def api(request):

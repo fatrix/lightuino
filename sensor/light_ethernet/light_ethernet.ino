@@ -2,7 +2,6 @@
   Web client
  
  Inspired by:
- 
  http://arduino.cc/en/Tutorial/WebClientRepeating
  
  NTP from:
@@ -24,6 +23,8 @@ typedef enum {
   NOTREAD
 } 
 STATE;
+
+
 byte mac[] = {  
   0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 IPAddress server(192,168,3,95);
@@ -63,14 +64,9 @@ boolean hasTime = false;
 void setup() {
   // start serial port:
   Serial.begin(9600);
-  // give the ethernet module time to boot up:
+  // give the ethernet module time to boot up
   delay(1000);
-  // start the Ethernet connection using a fixed IP address and DNS server:
   Ethernet.begin(mac);
-  // print the Ethernet board/shield's IP address:
-  //Serial.print("My IP address: ");
-  Serial.println(Ethernet.localIP());
-  //digitalWrite(10,HIGH);
 
   // Setup sd card -----------------------
   //Serial.print("Initializing SD card...");
@@ -82,15 +78,12 @@ void setup() {
     // don't do anything more:
     return;
   }
-  //Serial.println("card initialized.");
-  // # -----------------------------------
 
   Udp.begin(localPort);
 
 }
 
 void loop() {
-
   byte state = NOTREAD;
   byte c;
   int content_bytes_received = 0;
@@ -108,16 +101,22 @@ void loop() {
   }
   if (state==READ) {
     Serial.println(line_buff);
+    String s = line_buff;
+    if (s.startsWith("HTTP/1.0 200 OK")) {
+        Serial.println("Data sent, removing file...");
+        SD.remove(FILENAME);
+    } else {
+        Serial.println("Could not send data, remains on disk...");
+    }
     Serial.flush();
-    SD.remove(FILENAME);
   }
 
-    // If not connected but there was one in the last loop, disconnect
-    if (!client.connected() && lastConnected) {
-      //Serial.println();
-      //Serial.println("disconnecting.");
-      client.stop();
-    }
+  // If not connected but there was one in the last loop, disconnect
+  if (!client.connected() && lastConnected) {
+    //Serial.println();
+    //Serial.println("disconnecting.");
+    client.stop();
+  }
 
   // If not connected and it is time to connect, do the work
   if(!client.connected() && (millis() - lastConnectionTime > sync_interval)) {
@@ -139,23 +138,17 @@ void loop() {
     lastLight = millis();
 
     firstRun = false;
-
     delay(10000);
-  }
 
+  }
 
   // Store the state for the next run threw the loop
   lastConnected = client.connected();
-  // ----- end handle ethernet sftufflo
-
-
 
 }
 
 // Open TCP-Connection and send a HTTP Request
 void httpRequest() {
-  // if there's a successful connection:
-  //Serial.println("connecting...");
   if (client.connect(serverName, 8000)) {
 
     url = "POST /api/batch/" + String(" HTTP/1.1");
@@ -171,19 +164,24 @@ void httpRequest() {
 
       // read from the file until there's nothing else in it:
       while (myFile.available()) {
-        int c = myFile.read();
-        client.write(c);
+        int file_data = myFile.read();
+        client.write(file_data);
       }
       // close the file:
       myFile.close();
       client.println();
-
-      SD.remove(FILENAME);
+      client.flush();
 
     } 
     else {
       // if the file didn't open, print an error:
       Serial.println("error opening file");
+      if (lastConnected) {
+	 Serial.println("True");
+      } else {
+	 Serial.println("False");
+      }
+
     }
 
     // Save the time
@@ -216,11 +214,11 @@ boolean log(String dataString) {
   // if the file isn't open, pop up an error:
   else {
     Serial.println("error opening file");
-  } 
+  }
+  //Serial.flush();
 }
 
 long gettime() {
-  //Serial.println("Get time from timeserver");
   sendNTPpacket(timeServer); 
   delay(1000);  
   if ( Udp.parsePacket() ) {  
@@ -253,6 +251,8 @@ unsigned long sendNTPpacket(IPAddress& address)
   Udp.write(packetBuffer,NTP_PACKET_SIZE);
   Udp.endPacket(); 
 }
+
+
 
 
 
