@@ -13,6 +13,7 @@ class Data(models.Model):
 class TimedData(models.Model):
     value = models.IntegerField()
     date = models.DateTimeField()
+    added = models.DateTimeField(auto_now=True, auto_now_add=True)
 
     @property
     def ms(self):
