@@ -8,6 +8,8 @@ from models import Data, TimedData
 from django.views.decorators.csrf import csrf_exempt                                        
 import datetime
 import pytz
+from django.db import transaction
+
 
 def index(request):
     #data=Data.objects.raw('SELECT id, date, value, ROUND(UNIX_TIMESTAMP(date)/(15*60)) AS timekey FROM datalogger_data GROUP BY timekey')
@@ -21,8 +23,8 @@ def api(request):
     return HttpResponse()
 
 @csrf_exempt   
-def api_batch(request):
-    print request.body
+@transaction.commit_manually
+def api_batch(request, rollback=False):
     datas = request.body.split("|")
     for d in datas:
         try:
@@ -34,6 +36,15 @@ def api_batch(request):
             
            d = TimedData(value=light, date=s_date)
            d.save()
+        except ValueError, e:
+           print "ValueError"
+	   print e
         except Exception, e:
+           rollback=True
+           print "marking transaction for rollback"
            print e
+    if rollback:
+        transaction.rollback()
+    else:
+        transaction.commit()
     return HttpResponse()
