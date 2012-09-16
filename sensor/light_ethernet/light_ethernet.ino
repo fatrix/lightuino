@@ -30,9 +30,6 @@ byte mac[] = {
 IPAddress server(192,168,3,95);
 //char serverName[] = "lightuino-s5zrh4wu.dotcloud.com";
 char serverName[] = "192.168.3.95";
-//IPAddress ip(192,168,3,199);
-//IPAddress myDns(8,8,8,8);
-//IPAddress gw(192,168,3,1);
 
 // Client
 EthernetClient client;
@@ -42,10 +39,10 @@ String url;
 
 unsigned long lastConnectionTime = 0;
 boolean lastConnected = false;
-boolean lastLight = false;
+unsigned long lastLight = 0;
 boolean firstRun = true;
-const unsigned long log_interval = 60L*100L;
-const unsigned long sync_interval = 60L*500L;
+const unsigned long log_interval = 60L*1000L;
+const unsigned long sync_interval = 60L*5000L;
 
 // SD
 const int chipSelect = 4;
@@ -62,20 +59,16 @@ EthernetUDP Udp;
 boolean hasTime = false;
 
 void setup() {
-  // start serial port:
   Serial.begin(9600);
   // give the ethernet module time to boot up
   delay(1000);
   Ethernet.begin(mac);
 
-  // Setup sd card -----------------------
-  //Serial.print("Initializing SD card...");
   pinMode(4, OUTPUT);
 
   // see if the card is present and can be initialized:
   if (!SD.begin(chipSelect)) {
-    Serial.println("Card failed, or not present");
-    // don't do anything more:
+    Serial.println("Card failed");
     return;
   }
 
@@ -87,8 +80,9 @@ void loop() {
   byte state = NOTREAD;
   byte c;
   int content_bytes_received = 0;
-  char line_buff[100];
+  char line_buff[15];
   int line_cursor = 0;
+  delay(500);
   // ---- handle ethernet stuff
 
   // Read incoming data if any available
@@ -100,36 +94,32 @@ void loop() {
     state=READ;
   }
   if (state==READ) {
-    Serial.println(line_buff);
+    //Serial.println(line_buff);
+    delay(200);
     String s = line_buff;
     if (s.startsWith("HTTP/1.0 200 OK")) {
-        Serial.println("Data sent, removing file...");
         SD.remove(FILENAME);
     } else {
-        Serial.println("Could not send data, remains on disk...");
+       Serial.println("Could not send data, remains on disk...");
     }
     Serial.flush();
   }
 
   // If not connected but there was one in the last loop, disconnect
   if (!client.connected() && lastConnected) {
-    //Serial.println();
-    //Serial.println("disconnecting.");
+    Serial.println("disconnecting.");
     client.stop();
   }
 
   // If not connected and it is time to connect, do the work
   if(!client.connected() && (millis() - lastConnectionTime > sync_interval)) {
     httpRequest();
+    delay(500);
   } 
 
-  // do work in following conditions
-  // - firstRun (on startup)
-  // - when it is time
-  // - but there is no http traffic 
-  else if (firstRun || (millis() - lastLight > log_interval) && !lastConnected) {
+  else if (firstRun || ((millis() - lastLight > log_interval) && !lastConnected)) {
     // log light
-    char buf[50];
+    char buf[20];
     int light = readLight();
     unsigned long time = gettime();
 
@@ -139,7 +129,6 @@ void loop() {
 
     firstRun = false;
     delay(10000);
-
   }
 
   // Store the state for the next run threw the loop
@@ -183,14 +172,13 @@ void httpRequest() {
       }
 
     }
+    myFile.close();
 
     // Save the time
     lastConnectionTime = millis();
   } 
   else {
-    // if you couldn't make a connection:
-    //Serial.println("connection failed");
-    //Serial.println("disconnecting.");
+    Serial.println("connection failed");
     client.stop();
   }
 }
@@ -202,6 +190,7 @@ int readLight() {
 }
 
 boolean log(String dataString) {
+  delay(500);
   File dataFile = SD.open(FILENAME, FILE_WRITE);
 
   // if the file is available, write to it:
@@ -209,11 +198,11 @@ boolean log(String dataString) {
     dataFile.print(dataString);
     dataFile.close();
     // print to the serial port too:
-    Serial.println("Written to log: "+dataString);
+    Serial.println("2log: "+dataString);
   }  
   // if the file isn't open, pop up an error:
   else {
-    Serial.println("error opening file");
+    Serial.println("Error oppening file");
   }
   //Serial.flush();
 }
@@ -253,10 +242,8 @@ unsigned long sendNTPpacket(IPAddress& address)
 }
 
 
-
-
-
-
-
-
-
+int freeRam () {
+  extern int __heap_start, *__brkval; 
+  int v; 
+  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
+}
